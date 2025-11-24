@@ -216,7 +216,7 @@ const ChatLayout: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col relative z-10 w-full">
         {/* Header */}
-        <header className="flex-shrink-0 bg-white md:border-none">
+        <header className="flex-shrink-0 bg-white border-none fixed top-0 left-0 right-0 z-20 md:static shadow-none">
           <div className="px-4 py-3">
             <div className="flex items-center gap-3">
               <button
@@ -233,7 +233,7 @@ const ChatLayout: React.FC = () => {
         </header>
 
         {/* Chat Area */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col mt-14 md:mt-0">
           <MessageList messages={messages} isLoading={isLoading} />
         </div>
 

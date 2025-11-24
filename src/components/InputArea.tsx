@@ -60,7 +60,10 @@ const InputArea: React.FC<InputAreaProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // On mobile, Enter should add a new line. On desktop, it submits.
+    const isMobile = window.innerWidth < 768;
+
+    if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
       e.preventDefault();
       handleSubmit(e);
     }
@@ -150,7 +153,7 @@ const InputArea: React.FC<InputAreaProps> = ({
               placeholder={isRecording ? "Listening..." : isTranscribing ? "Transcribing..." : "Ask Owlet..."}
               disabled={isLoading || disabled || isTranscribing}
               rows={1}
-              className={`w-full resize-none bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto no-scrollbar text-[15px] leading-relaxed transition-all duration-300 ${isInitialState ? 'px-6 py-4 md:px-8 md:py-6 pr-16 md:pr-60 text-base' : 'px-4 py-3 md:px-6 md:py-4 pr-16 md:pr-56'}`}
+              className={`w-full resize-none bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto no-scrollbar text-[15px] leading-relaxed transition-all duration-300 min-h-[72px] ${isInitialState ? 'px-6 py-6 md:px-8 md:py-8 pr-16 md:pr-60 text-base' : 'px-4 py-5 md:px-6 md:py-6 pr-16 md:pr-56'}`}
             />
             <div className="absolute bottom-2 right-2 md:bottom-3 md:right-4 flex items-center gap-2 md:gap-3">
               {/* Model Selector */}
