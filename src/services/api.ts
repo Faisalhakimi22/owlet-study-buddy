@@ -2,8 +2,8 @@
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://40.81.23.127:8000/chat';
 const API_KEY = import.meta.env.VITE_API_KEY;
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+// const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; // Removed for security
+const GROQ_API_URL = '/api/groq'; // Use local serverless function
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -90,7 +90,7 @@ IMPORTANT INSTRUCTIONS:
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_API_KEY}`
+          // 'Authorization': `Bearer ${GROQ_API_KEY}` // Handled by backend
         },
         body: JSON.stringify({
           model: model,
