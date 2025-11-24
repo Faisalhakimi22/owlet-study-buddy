@@ -4,6 +4,7 @@ import MessageList from './MessageList';
 import InputArea from './InputArea';
 import GeminiSidebar from './GeminiSidebar';
 import StarBackground from './StarBackground';
+import { BackgroundPaths } from './ui/background-paths';
 import WelcomeScreen from './WelcomeScreen';
 import NameInputScreen from './NameInputScreen';
 import PersonalizedWelcome from './PersonalizedWelcome';
@@ -169,8 +170,9 @@ const ChatLayout: React.FC = () => {
   if (appState === 'welcome') {
     return (
       <div className="flex h-screen bg-white relative overflow-hidden">
-        <StarBackground />
-        <WelcomeScreen onStart={handleStart} />
+        <BackgroundPaths title="Welcome to Owlet | StudyBuddy" logoSrc="/logo.png">
+          <WelcomeScreen onStart={handleStart} />
+        </BackgroundPaths>
       </div>
     );
   }
