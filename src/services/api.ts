@@ -3,7 +3,7 @@
 const API_URL = '/api/chat'; // Use local serverless function to avoid Mixed Content error
 // const API_KEY = import.meta.env.VITE_API_KEY; // Handled by backend
 // const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; // Removed for security
-const GROQ_API_KEY = ''; // Placeholder to fix TS errors. Audio features will need a backend proxy.
+// const GROQ_API_KEY = ''; // Placeholder removed as it's no longer needed
 const GROQ_API_URL = '/api/groq'; // Use local serverless function
 
 export interface ChatMessage {
@@ -204,9 +204,9 @@ IMPORTANT INSTRUCTIONS:
   }
 };
 
-const GROQ_TRANSCRIPTION_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
-const GROQ_TRANSLATION_URL = 'https://api.groq.com/openai/v1/audio/translations';
-const GROQ_TTS_URL = 'https://api.groq.com/openai/v1/audio/speech';
+const GROQ_TRANSCRIPTION_URL = '/api/transcribe';
+const GROQ_TRANSLATION_URL = '/api/translate';
+const GROQ_TTS_URL = '/api/tts';
 
 export const transcribeAudio = async (audioFile: File): Promise<string> => {
   const formData = new FormData();
@@ -217,7 +217,7 @@ export const transcribeAudio = async (audioFile: File): Promise<string> => {
     const response = await fetch(GROQ_TRANSCRIPTION_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
       },
       body: formData,
     });
@@ -244,7 +244,7 @@ export const translateAudio = async (audioFile: File): Promise<string> => {
     const response = await fetch(GROQ_TRANSLATION_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
       },
       body: formData,
     });
@@ -282,7 +282,7 @@ export const generateSpeech = async (text: string): Promise<Blob> => {
     const response = await fetch(GROQ_TTS_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
