@@ -1,7 +1,7 @@
 // API service for communicating with the local LLM API
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://40.81.23.127:8000/chat';
-const API_KEY = import.meta.env.VITE_API_KEY;
+const API_URL = '/api/chat'; // Use local serverless function to avoid Mixed Content error
+// const API_KEY = import.meta.env.VITE_API_KEY; // Handled by backend
 // const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; // Removed for security
 const GROQ_API_URL = '/api/groq'; // Use local serverless function
 
@@ -137,7 +137,7 @@ IMPORTANT INSTRUCTIONS:
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
+      // 'X-API-Key': API_KEY, // Handled by backend
     },
     body: requestBody,
   });
@@ -147,7 +147,7 @@ IMPORTANT INSTRUCTIONS:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': API_KEY,
+        // 'X-API-Key': API_KEY, // Handled by backend
       },
       body: JSON.stringify(requestBody),
     });
