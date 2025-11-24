@@ -26,6 +26,7 @@ type RollingTextProps = Omit<React.ComponentProps<'span'>, 'children'> & {
   inViewMargin?: UseInViewOptions['margin'];
   inViewOnce?: boolean;
   text: string;
+  baseDelay?: number;
 };
 
 const RollingText = React.forwardRef<HTMLSpanElement, RollingTextProps>(
@@ -36,6 +37,7 @@ const RollingText = React.forwardRef<HTMLSpanElement, RollingTextProps>(
       inViewMargin = '0px',
       inViewOnce = true,
       text,
+      baseDelay = 0,
       ...props
     },
     ref
@@ -65,7 +67,7 @@ const RollingText = React.forwardRef<HTMLSpanElement, RollingTextProps>(
               animate={isInView ? ENTRY_ANIMATION.animate : undefined}
               transition={{
                 ...transition,
-                delay: idx * (transition?.delay ?? 0),
+                delay: baseDelay + idx * (transition?.delay ?? 0),
               }}
             >
               {formatCharacter(char)}
@@ -76,7 +78,7 @@ const RollingText = React.forwardRef<HTMLSpanElement, RollingTextProps>(
               animate={isInView ? EXIT_ANIMATION.animate : undefined}
               transition={{
                 ...transition,
-                delay: idx * (transition?.delay ?? 0) + 0.3,
+                delay: baseDelay + idx * (transition?.delay ?? 0) + 0.3,
               }}
             >
               {formatCharacter(char)}
