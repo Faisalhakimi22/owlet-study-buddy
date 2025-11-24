@@ -1,8 +1,8 @@
 // API service for communicating with the local LLM API
 
-const API_URL = 'http://40.81.23.127:8000/chat';
-const API_KEY = 'university-2024-api-key';
-const GROQ_API_KEY = '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';
+const API_URL = import.meta.env.VITE_API_URL || 'http://40.81.23.127:8000/chat';
+const API_KEY = import.meta.env.VITE_API_KEY;
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 export interface ChatMessage {

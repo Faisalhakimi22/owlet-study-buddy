@@ -6,35 +6,35 @@ function Chatbot() {
   const [loading, setLoading] = useState(false);
 
   const API_URL = 'http://40.81.23.127:8000/chat';
-  const API_KEY = 'university-2024-api-key';
+  const API_KEY = import.meta.env.VITE_API_KEY;
 
   // Function to clean the response
   const cleanResponse = (rawResponse) => {
     // Remove everything before the last "Assistant:"
     let cleaned = rawResponse;
-    
+
     if (rawResponse.includes('Assistant:')) {
       const parts = rawResponse.split('Assistant:');
       cleaned = parts[parts.length - 1];
     }
-    
+
     // Remove user messages
     if (cleaned.includes('User:')) {
       cleaned = cleaned.split('User:')[0];
     }
-    
+
     // Remove timestamps (HH:MM format)
     cleaned = cleaned.replace(/\d{1,2}:\d{2}/g, '');
-    
+
     // Remove processing time and model info (e.g., "31.66stinyllama:latest")
     cleaned = cleaned.replace(/\d+\.\d+s\w+:\w+/g, '');
-    
+
     // Remove standalone numbers at the end
     cleaned = cleaned.replace(/\s+\d+\.\d+s.*$/g, '');
-    
+
     // Clean up extra whitespace
     cleaned = cleaned.trim();
-    
+
     return cleaned;
   };
 
@@ -43,7 +43,7 @@ function Chatbot() {
 
     const userMessage = input.trim();
     setInput('');
-    
+
     // Add user message to chat
     const newUserMessage = { role: 'user', content: userMessage };
     setMessages(prev => [...prev, newUserMessage]);
@@ -77,21 +77,21 @@ function Chatbot() {
       }
 
       const data = await response.json();
-      
+
       // Clean the response
       const cleanedResponse = cleanResponse(data.response);
-      
+
       // Add bot response to chat
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: cleanedResponse 
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: cleanedResponse
       }]);
 
     } catch (error) {
       console.error('Error:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Sorry, I encountered an error. Please try again.' 
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.'
       }]);
     } finally {
       setLoading(false);
@@ -101,11 +101,11 @@ function Chatbot() {
   return (
     <div style={{ maxWidth: '600px', margin: '50px auto', padding: '20px' }}>
       <h2>🎓 Student Support Chatbot</h2>
-      
+
       {/* Chat Messages */}
-      <div style={{ 
-        height: '400px', 
-        overflowY: 'auto', 
+      <div style={{
+        height: '400px',
+        overflowY: 'auto',
         border: '1px solid #ddd',
         padding: '15px',
         marginBottom: '20px',
@@ -118,9 +118,9 @@ function Chatbot() {
             <p>How can I help you today?</p>
           </div>
         )}
-        
+
         {messages.map((msg, index) => (
-          <div 
+          <div
             key={index}
             style={{
               marginBottom: '15px',
@@ -138,7 +138,7 @@ function Chatbot() {
             <div style={{ marginTop: '5px' }}>{msg.content}</div>
           </div>
         ))}
-        
+
         {loading && (
           <div style={{ textAlign: 'center', color: '#666', padding: '10px' }}>
             <div>⏳ Thinking...</div>
