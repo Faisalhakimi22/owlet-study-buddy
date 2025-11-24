@@ -7,6 +7,7 @@ import StarBackground from './StarBackground';
 import WelcomeScreen from './WelcomeScreen';
 import NameInputScreen from './NameInputScreen';
 import PersonalizedWelcome from './PersonalizedWelcome';
+import InstallPrompt from './InstallPrompt';
 import { sendMessageToBot } from '../services/api';
 import { Message, ChatSession } from '../types';
 import { getChatSessions, saveChatSession, createChatSession, deleteChatSession } from '../utils/chatStorage';
@@ -253,6 +254,7 @@ const ChatLayout: React.FC = () => {
           onModelChange={setSelectedModel}
         />
       </div>
+      <InstallPrompt />
     </div>
   );
 };
