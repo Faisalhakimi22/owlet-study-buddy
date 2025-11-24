@@ -3,6 +3,7 @@
 const API_URL = '/api/chat'; // Use local serverless function to avoid Mixed Content error
 // const API_KEY = import.meta.env.VITE_API_KEY; // Handled by backend
 // const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; // Removed for security
+const GROQ_API_KEY = ''; // Placeholder to fix TS errors. Audio features will need a backend proxy.
 const GROQ_API_URL = '/api/groq'; // Use local serverless function
 
 export interface ChatMessage {
