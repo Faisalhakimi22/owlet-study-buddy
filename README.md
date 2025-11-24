@@ -25,12 +25,45 @@
 -   **📱 Fully Responsive**: Optimized for both desktop and mobile devices.
 -   **🎭 Dynamic Interface**: Engaging elements like rolling text and interactive sidebars.
 
+## 🧠 Engineering Highlights
+
+### Hybrid AI Architecture
+Owlet implements a sophisticated **model routing system** that allows users to switch seamlessly between:
+-   **Local Intelligence**: A cost-effective **Phi-3** model hosted on a custom Azure Virtual Machine for fast, unlimited queries.
+-   **Cloud Powerhouse**: The **Llama 3.3 70B** model via Groq for complex reasoning and high-fidelity responses.
+
+### Serverless Security Architecture
+To ensure enterprise-grade security, this project uses a **Backend-for-Frontend (BFF)** pattern with Vercel Serverless Functions:
+-   **Zero Key Exposure**: Sensitive API keys (Groq, Azure) are stored server-side and never exposed to the client browser.
+-   **Secure Proxying**: Custom endpoints (`/api/chat`, `/api/groq`) act as secure gateways, sanitizing requests before forwarding them to upstream AI providers.
+
+### Progressive Web App (PWA)
+Engineered to provide a native-app experience on the web:
+-   **Installable**: Custom `manifest.json` configuration allows users to install Owlet to their home screen.
+-   **Platform-Aware**: A custom `InstallPrompt` component detects the user's device (iOS vs. Android) and serves the appropriate installation instructions.
+-   **Mobile Optimization**: Implemented `viewport-fit=cover` and specific touch-event handling to prevent "rubber-banding" and ensure a native feel.
+
+## 🔧 Technical Challenges Solved
+
+### 🔐 Bridging HTTPS and HTTP (Mixed Content)
+**The Challenge**: Modern browsers block secure (HTTPS) websites from making requests to insecure (HTTP) APIs. Our Azure VM exposes an HTTP endpoint, while Vercel serves the frontend over HTTPS.
+**The Solution**: Built a custom **Vercel Serverless Proxy** that tunnels requests from the secure frontend to the insecure backend. This allows the browser to communicate strictly over HTTPS while the serverless function handles the HTTP handshake, effectively bypassing the Mixed Content limitation securely.
+
+### 📱 Native-Like Mobile UX
+**The Challenge**: Web apps often feel "floaty" on mobile due to address bars, rubber-band scrolling, and virtual keyboard shifts.
+**The Solution**:
+-   **Fixed Viewports**: Locked the body scroll and used `interactive-widget=resizes-content` to handle the virtual keyboard gracefully.
+-   **Smart Input**: Modified the "Enter" key behavior on mobile to insert new lines instead of submitting, matching native messaging app patterns.
+
 ## 🛠️ Tech Stack
 
 -   **Frontend Framework**: React 18
 -   **Build Tool**: Vite
 -   **Language**: TypeScript
 -   **Styling**: Tailwind CSS & Vanilla CSS
+-   **Backend**: Vercel Serverless Functions (Node.js)
+-   **AI Infrastructure**: Azure VM (Phi-3), Groq API (Llama 3.3)
+-   **PWA**: Web App Manifest, iOS Meta Tags
 -   **Icons**: Lucide React
 -   **Animations**: Framer Motion
 
