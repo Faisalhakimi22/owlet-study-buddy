@@ -128,10 +128,11 @@ IMPORTANT INSTRUCTIONS:
   // Check for custom API URL in localStorage
   const customApiUrl = localStorage.getItem('custom-api-url');
 
-  // Only use custom URL if the selected model is 'custom-model' and the URL exists
-  const targetUrl = (model === 'custom-model' && customApiUrl) ? customApiUrl : API_URL;
+  // Always send to the Vercel backend (API_URL) to avoid CORS
+  // Pass the custom URL in the body so the backend can proxy it
+  const targetUrl = API_URL;
 
-  const requestBody: ChatRequest = {
+  const requestBody: ChatRequest & { customUrl?: string } = {
     prompt: prompt,
     max_tokens: maxTokens,
     temperature: temperature,
@@ -139,30 +140,26 @@ IMPORTANT INSTRUCTIONS:
     conversation_history: historyToSend,
   };
 
-  console.log('🚀 Sending request to Local API:', {
+  // If using custom model, add the custom URL to the body
+  if (model === 'custom-model' && customApiUrl) {
+    requestBody.customUrl = customApiUrl;
+  }
+
+  console.log('🚀 Sending request to Proxy API:', {
     url: targetUrl,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      // 'X-API-Key': API_KEY, // Handled by backend
     },
     body: requestBody,
   });
 
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    // If using custom URL, try text/plain to avoid CORS preflight (simple request)
-    // Note: The server must be able to parse JSON body even with text/plain header
-    if (targetUrl === customApiUrl) {
-      headers['Content-Type'] = 'text/plain';
-    }
-
     const response = await fetch(targetUrl, {
       method: 'POST',
-      headers: headers,
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(requestBody),
     });
 

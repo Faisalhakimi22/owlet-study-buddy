@@ -6,21 +6,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const API_URL = process.env.VITE_API_URL;
+    let targetUrl = process.env.VITE_API_URL;
     const API_KEY = process.env.VITE_API_KEY;
 
-    if (!API_URL || !API_KEY) {
-        return res.status(500).json({ error: 'Server configuration error: Missing API URL or Key' });
+    // Check if a custom URL is provided in the request body
+    const { customUrl, ...body } = req.body;
+
+    if (customUrl) {
+        targetUrl = customUrl;
+        console.log('Using custom URL:', targetUrl);
+    }
+
+    if (!targetUrl) {
+        return res.status(500).json({ error: 'Server configuration error: Missing API URL' });
     }
 
     try {
-        const response = await fetch(API_URL, {
+        const response = await fetch(targetUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-API-Key': API_KEY,
+                ...(API_KEY && !customUrl ? { 'X-API-Key': API_KEY } : {}), // Only send API key to default backend
             },
-            body: JSON.stringify(req.body),
+            body: JSON.stringify(body),
         });
 
         if (!response.ok) {
