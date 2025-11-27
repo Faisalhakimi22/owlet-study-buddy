@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, PenLine, Code, GraduationCap, ChevronDown, Sparkles, Zap, Mic, Square } from 'lucide-react';
+import { Send, Loader2, PenLine, Code, GraduationCap, ChevronDown, Sparkles, Zap, Mic, Square, Link } from 'lucide-react';
 import { transcribeAudio } from '../services/api';
 
 interface InputAreaProps {
@@ -136,6 +136,16 @@ const InputArea: React.FC<InputAreaProps> = ({
     { id: 'phi', name: 'Phi (Local)', icon: Zap, description: 'Fast, local model' },
     { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 (Groq)', icon: Sparkles, description: 'Powerful, versatile model' },
   ];
+
+  const customUrl = localStorage.getItem('custom-api-url');
+  if (customUrl) {
+    models.push({
+      id: 'custom-model',
+      name: 'Custom Model',
+      icon: Link,
+      description: 'Using custom API URL'
+    });
+  }
 
   const currentModel = models.find(m => m.id === selectedModel) || models[0];
 

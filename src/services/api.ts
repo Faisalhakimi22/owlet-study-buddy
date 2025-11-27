@@ -127,7 +127,9 @@ IMPORTANT INSTRUCTIONS:
   // Default Local API call
   // Check for custom API URL in localStorage
   const customApiUrl = localStorage.getItem('custom-api-url');
-  const targetUrl = customApiUrl || API_URL;
+
+  // Only use custom URL if the selected model is 'custom-model' and the URL exists
+  const targetUrl = (model === 'custom-model' && customApiUrl) ? customApiUrl : API_URL;
 
   const requestBody: ChatRequest = {
     prompt: prompt,
