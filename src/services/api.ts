@@ -118,100 +118,221 @@ IMPORTANT INSTRUCTIONS:
 
     } catch (error) {
       console.error('❌ Error calling Groq API:', error);
-      export const transcribeAudio = async (audioFile: File): Promise<string> => {
-        const formData = new FormData();
-        formData.append('file', audioFile);
-        formData.append('model', 'whisper-large-v3');
+      throw {
+        message: error instanceof Error ? error.message : 'Failed to call Groq API',
+      } as ApiError;
+    }
+  }
 
-        try {
-          const response = await fetch(GROQ_TRANSCRIPTION_URL, {
-            method: 'POST',
-            headers: {
-              // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
-            },
-            body: formData,
-          });
+  // Default Local API call / Custom Proxy
+  // Check for custom API URL in localStorage
+  const customApiUrl = localStorage.getItem('custom-api-url');
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Groq Transcription API error: ${response.status} - ${errorText}`);
-          }
+  // Always send to the Vercel backend (API_URL) to avoid CORS
+  // Pass the custom URL in the body so the backend can proxy it
+  const targetUrl = API_URL;
 
-          const data = await response.json();
-          return data.text;
-        } catch (error) {
-          console.error('❌ Error transcribing audio:', error);
-          throw error;
-        }
-      };
+  let requestBody: any = {
+    prompt: prompt,
+    max_tokens: maxTokens,
+    temperature: temperature,
+    system: systemMsg,
+    conversation_history: historyToSend,
+  };
 
-      export const translateAudio = async (audioFile: File): Promise<string> => {
-        const formData = new FormData();
-        formData.append('file', audioFile);
-        formData.append('model', 'whisper-large-v3');
+  // If using custom model, adapt payload for Ollama/OpenAI format
+  if (model === 'custom-model' && customApiUrl) {
+    const messages = [
+      { role: 'system', content: systemMsg },
+      ...(historyToSend || []),
+      { role: 'user', content: prompt }
+    ];
 
-        try {
-          const response = await fetch(GROQ_TRANSLATION_URL, {
-            method: 'POST',
-            headers: {
-              // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
-            },
-            body: formData,
-          });
+    requestBody = {
+      customUrl: customApiUrl,
+      model: 'qwen3:8b', // User specified model
+      messages: messages,
+      stream: false // Ensure we get a full response, not a stream
+    };
+  }
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Groq Translation API error: ${response.status} - ${errorText}`);
-          }
+  console.log('🚀 Sending request to Proxy API:', {
+    url: targetUrl,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: requestBody,
+  });
 
-          const data = await response.json();
-          return data.text;
-        } catch (error) {
-          console.error('❌ Error translating audio:', error);
-          throw error;
-        }
-      };
+  try {
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
 
-      export const generateSpeech = async (text: string): Promise<Blob> => {
-        console.log('🔊 Generating speech for text:', text.substring(0, 50) + '...');
-        try {
-          const requestBody = {
-            // Wait, the user specifically gave 'playai-tts'. I should stick to that but maybe try a standard one if that fails? 
-            // actually, let's keep the user's model but log the request.
-            model: 'playai-tts',
-            input: text,
-            voice: 'Fritz-PlayAI',
-            response_format: 'wav',
-          };
+    console.log('📡 API Response status:', response.status, response.statusText);
 
-          console.log('🚀 Sending TTS request:', {
-            url: GROQ_TTS_URL,
-            body: requestBody
-          });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ API Error Response:', errorText);
+      throw new Error(
+        `API error: ${response.status} - ${errorText || response.statusText}`
+      );
+    }
 
-          const response = await fetch(GROQ_TTS_URL, {
-            method: 'POST',
-            headers: {
-              // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody),
-          });
+    const data: any = await response.json();
+    console.log('✅ API Response data:', data);
+    console.log('🤖 Model used:', data.model || 'Not specified');
 
-          console.log('📡 TTS Response status:', response.status);
+    // Handle different response formats
+    let responseText = '';
+    if (data.response) {
+      // Our default format
+      responseText = data.response;
+    } else if (data.message && data.message.content) {
+      // Ollama/OpenAI format
+      responseText = data.message.content;
+    } else if (data.choices && data.choices[0] && data.choices[0].message) {
+      // Standard OpenAI format
+      responseText = data.choices[0].message.content;
+    } else {
+      console.error('❌ Invalid response format:', data);
+      throw new Error('Invalid response format from API');
+    }
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Groq TTS API Error:', errorText);
-            throw new Error(`Groq TTS API error: ${response.status} - ${errorText}`);
-          }
+    console.log('✅ Returning response:', responseText);
+    return {
+      response: responseText,
+      model: data.model,
+      processingTime: data.processing_time || 0,
+    };
+  } catch (error) {
+    console.error('❌ Error sending message:', error);
 
-          const blob = await response.blob();
-          console.log('✅ TTS Blob received, size:', blob.size);
-          return blob;
-        } catch (error) {
-          console.error('❌ Error generating speech:', error);
-          throw error;
-        }
-      };
+    // Check if it's a network/CORS error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('❌ Network error - possible CORS issue or server unreachable');
+      throw {
+        message: 'Failed to connect to the API server. Please check if the server is running and CORS is configured correctly.',
+        status: undefined,
+      } as ApiError;
+    }
 
+    if (error instanceof Error) {
+      // Re-throw with more context
+      throw {
+        message: error.message,
+        status: (error as ApiError).status,
+      } as ApiError;
+    }
+
+    throw {
+      message: 'Failed to connect to the server. Please check your connection and try again.',
+    } as ApiError;
+  }
+};
+
+const GROQ_TRANSCRIPTION_URL = '/api/transcribe';
+const GROQ_TRANSLATION_URL = '/api/translate';
+const GROQ_TTS_URL = '/api/tts';
+
+export const transcribeAudio = async (audioFile: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append('file', audioFile);
+  formData.append('model', 'whisper-large-v3');
+
+  try {
+    const response = await fetch(GROQ_TRANSCRIPTION_URL, {
+      method: 'POST',
+      headers: {
+        // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Groq Transcription API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.text;
+  } catch (error) {
+    console.error('❌ Error transcribing audio:', error);
+    throw error;
+  }
+};
+
+export const translateAudio = async (audioFile: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append('file', audioFile);
+  formData.append('model', 'whisper-large-v3');
+
+  try {
+    const response = await fetch(GROQ_TRANSLATION_URL, {
+      method: 'POST',
+      headers: {
+        // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Groq Translation API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.text;
+  } catch (error) {
+    console.error('❌ Error translating audio:', error);
+    throw error;
+  }
+};
+
+export const generateSpeech = async (text: string): Promise<Blob> => {
+  console.log('🔊 Generating speech for text:', text.substring(0, 50) + '...');
+  try {
+    const requestBody = {
+      // Wait, the user specifically gave 'playai-tts'. I should stick to that but maybe try a standard one if that fails? 
+      // actually, let's keep the user's model but log the request.
+      model: 'playai-tts',
+      input: text,
+      voice: 'Fritz-PlayAI',
+      response_format: 'wav',
+    };
+
+    console.log('🚀 Sending TTS request:', {
+      url: GROQ_TTS_URL,
+      body: requestBody
+    });
+
+    const response = await fetch(GROQ_TTS_URL, {
+      method: 'POST',
+      headers: {
+        // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    console.log('📡 TTS Response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Groq TTS API Error:', errorText);
+      throw new Error(`Groq TTS API error: ${response.status} - ${errorText}`);
+    }
+
+    const blob = await response.blob();
+    console.log('✅ TTS Blob received, size:', blob.size);
+    return blob;
+  } catch (error) {
+    console.error('❌ Error generating speech:', error);
+    throw error;
+  }
+};
