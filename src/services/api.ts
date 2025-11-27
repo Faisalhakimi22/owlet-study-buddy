@@ -125,93 +125,41 @@ IMPORTANT INSTRUCTIONS:
   }
 
   // Default Local API call
-  // Check for custom API URL in localStorage
-  const customApiUrl = localStorage.getItem('custom-api-url');
+  'Content-Type': 'application/json',
+    },
+  body: requestBody,
+  });
 
-  // Always send to the Vercel backend (API_URL) to avoid CORS
-  // Pass the custom URL in the body so the backend can proxy it
-  const targetUrl = API_URL;
-
-  const requestBody: ChatRequest & { customUrl?: string } = {
-    prompt: prompt,
-    max_tokens: maxTokens,
-    temperature: temperature,
-    system: systemMsg,
-    conversation_history: historyToSend,
-  };
-
-  // If using custom model, add the custom URL to the body
-  if (model === 'custom-model' && customApiUrl) {
-    requestBody.customUrl = customApiUrl;
-  }
-
-  console.log('🚀 Sending request to Proxy API:', {
-    url: targetUrl,
+try {
+  const response = await fetch(targetUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: requestBody,
+    body: JSON.stringify(requestBody),
   });
 
-  try {
-    const response = await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+  console.log('📡 API Response status:', response.status, response.statusText);
 
-    console.log('📡 API Response status:', response.status, response.statusText);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ API Error Response:', errorText);
-      throw new Error(
-        `API error: ${response.status} - ${errorText || response.statusText}`
-      );
-    }
-
-    const data: ChatResponse = await response.json();
-    console.log('✅ API Response data:', data);
-    console.log('🤖 Model used:', data.model || 'Not specified');
-
-    if (!data.response) {
-      console.error('❌ Invalid response format - missing "response" field:', data);
-      throw new Error('Invalid response format from API - missing "response" field');
-    }
-
-    console.log('✅ Returning response:', data.response);
-    return {
-      response: data.response,
-      model: data.model,
-      processingTime: data.processing_time,
-    };
-  } catch (error) {
-    console.error('❌ Error sending message:', error);
-
-    // Check if it's a network/CORS error
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      console.error('❌ Network error - possible CORS issue or server unreachable');
-      throw {
-        message: 'Failed to connect to the API server. Please check if the server is running and CORS is configured correctly.',
-        status: undefined,
-      } as ApiError;
-    }
-
-    if (error instanceof Error) {
-      // Re-throw with more context
-      throw {
-        message: error.message,
-        status: (error as ApiError).status,
-      } as ApiError;
-    }
-
-    throw {
-      message: 'Failed to connect to the server. Please check your connection and try again.',
+  if (!response.ok) {
+    const errorText = await response.text();
+    message: 'Failed to connect to the API server. Please check if the server is running and CORS is configured correctly.',
+      status: undefined,
     } as ApiError;
-  }
+}
+
+  if (error instanceof Error) {
+  // Re-throw with more context
+  throw {
+    message: error.message,
+    status: (error as ApiError).status,
+  } as ApiError;
+}
+
+throw {
+  message: 'Failed to connect to the server. Please check your connection and try again.',
+} as ApiError;
+}
 };
 
 const GROQ_TRANSCRIPTION_URL = '/api/transcribe';
