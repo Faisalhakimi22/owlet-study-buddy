@@ -143,14 +143,14 @@ IMPORTANT INSTRUCTIONS:
   // If using custom model, adapt payload for Ollama/OpenAI format
   if (model === 'custom-model' && customApiUrl) {
     const messages = [
-      { role: 'system', content: systemMsg },
+      // { role: 'system', content: systemMsg }, // User requested to remove system prompt for custom model
       ...(historyToSend || []),
       { role: 'user', content: prompt }
     ];
 
     requestBody = {
       customUrl: customApiUrl,
-      model: 'qwen3:8b', // User specified model
+      model: 'gpt-oss:120b-cloud', // User specified model
       messages: messages,
       stream: false // Ensure we get a full response, not a stream
     };
