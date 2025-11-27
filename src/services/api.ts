@@ -125,6 +125,10 @@ IMPORTANT INSTRUCTIONS:
   }
 
   // Default Local API call
+  // Check for custom API URL in localStorage
+  const customApiUrl = localStorage.getItem('custom-api-url');
+  const targetUrl = customApiUrl || API_URL;
+
   const requestBody: ChatRequest = {
     prompt: prompt,
     max_tokens: maxTokens,
@@ -134,7 +138,7 @@ IMPORTANT INSTRUCTIONS:
   };
 
   console.log('🚀 Sending request to Local API:', {
-    url: API_URL,
+    url: targetUrl,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -144,7 +148,7 @@ IMPORTANT INSTRUCTIONS:
   });
 
   try {
-    const response = await fetch(API_URL, {
+    const response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

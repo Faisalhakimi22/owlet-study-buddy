@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Edit, Settings, Trash2, PanelLeftClose, PanelLeft, LogOut } from 'lucide-react';
+import { Edit, Settings, Trash2, PanelLeftClose, PanelLeft, LogOut, Link } from 'lucide-react';
 import { ChatSession } from '../types';
+import ApiSettingsModal from './ApiSettingsModal';
 
 interface GeminiSidebarProps {
   onNewChat?: () => void;
@@ -26,6 +27,7 @@ const GeminiSidebar: React.FC<GeminiSidebarProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showApiSettings, setShowApiSettings] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,6 +43,8 @@ const GeminiSidebar: React.FC<GeminiSidebarProps> = ({
 
   return (
     <>
+      <ApiSettingsModal isOpen={showApiSettings} onClose={() => setShowApiSettings(false)} />
+
       {/* Mobile Overlay */}
       {isMobileOpen && (
         <div
@@ -188,6 +192,16 @@ const GeminiSidebar: React.FC<GeminiSidebarProps> = ({
           <div className="relative">
             {showSettingsMenu && (
               <div className={`absolute bottom-full left-0 mb-2 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-50 ${isCollapsed && !isMobileOpen ? 'w-48 left-12 bottom-0 mb-0' : 'w-full'}`}>
+                <button
+                  onClick={() => {
+                    setShowApiSettings(true);
+                    setShowSettingsMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left text-gray-700 border-b border-gray-100"
+                >
+                  <Link size={18} />
+                  <span className="font-medium text-sm">API Settings</span>
+                </button>
                 <button
                   onClick={() => {
                     onLogout?.();
