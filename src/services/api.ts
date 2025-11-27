@@ -150,12 +150,19 @@ IMPORTANT INSTRUCTIONS:
   });
 
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // If using custom URL, try text/plain to avoid CORS preflight (simple request)
+    // Note: The server must be able to parse JSON body even with text/plain header
+    if (targetUrl === customApiUrl) {
+      headers['Content-Type'] = 'text/plain';
+    }
+
     const response = await fetch(targetUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // 'X-API-Key': API_KEY, // Handled by backend
-      },
+      headers: headers,
       body: JSON.stringify(requestBody),
     });
 
