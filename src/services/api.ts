@@ -202,29 +202,37 @@ IMPORTANT INSTRUCTIONS:
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
 
-        // Try to parse JSON objects from buffer (Ollama style)
-        // Ollama sends multiple JSON objects concatenated
-        // { ... }\n{ ... }
-
         const lines = buffer.split('\n');
         buffer = lines.pop() || ''; // Keep the last incomplete line in buffer
 
         for (const line of lines) {
-          if (!line.trim()) continue;
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+
+          // Handle SSE format (data: prefix)
+          let jsonStr = trimmedLine;
+          if (trimmedLine.startsWith('data:')) {
+            jsonStr = trimmedLine.slice(5).trim();
+            if (jsonStr === '[DONE]') continue;
+          }
 
           try {
-            const json = JSON.parse(line);
+            const json = JSON.parse(jsonStr);
             let textChunk = '';
 
-            // Ollama format
-            if (json.message && json.message.content) {
+            // Format 1: {"token": "text"} (User's current format)
+            if (json.token) {
+              textChunk = json.token;
+            }
+            // Format 2: Ollama {"message": {"content": "text"}}
+            else if (json.message && json.message.content) {
               textChunk = json.message.content;
             }
-            // Standard OpenAI format (delta)
+            // Format 3: OpenAI {"choices": [{"delta": {"content": "text"}}]}
             else if (json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content) {
               textChunk = json.choices[0].delta.content;
             }
-            // Fallback: check for 'response' field (some other APIs)
+            // Format 4: Generic {"response": "text"}
             else if (json.response) {
               textChunk = json.response;
             }
@@ -239,10 +247,8 @@ IMPORTANT INSTRUCTIONS:
             }
           } catch (e) {
             // If not JSON, maybe it's raw text?
-            // If we are in "custom-model" mode, it's likely JSON.
-            // If default model, it might be raw text.
-            // Let's assume if JSON parse fails, treat as raw text ONLY if it doesn't look like JSON
-            if (!line.trim().startsWith('{')) {
+            // Only treat as raw text if it doesn't look like an SSE event or JSON
+            if (!trimmedLine.startsWith('data:') && !trimmedLine.startsWith('{')) {
               fullText += line + '\n';
               onChunk(fullText);
             }
