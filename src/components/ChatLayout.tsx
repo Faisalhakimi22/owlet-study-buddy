@@ -35,7 +35,7 @@ const ChatLayout: React.FC = () => {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const [selectedModel, setSelectedModel] = useState<string>('phi');
+  const [selectedModel, setSelectedModel] = useState<string>('mistral');
 
   // Load chat sessions on mount
   useEffect(() => {
@@ -101,7 +101,7 @@ const ChatLayout: React.FC = () => {
           content: msg.text,
         }));
 
-      const maxTokens = selectedModel === 'phi' ? 300 : 2048;
+      const maxTokens = selectedModel === 'mistral' ? 200 : 2048;
       const apiResponse = await sendMessageToBot(text, maxTokens, 0.7, conversationHistory, selectedModel);
 
       const newBotMsg: Message = {

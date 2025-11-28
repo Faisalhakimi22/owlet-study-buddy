@@ -133,7 +133,7 @@ const InputArea: React.FC<InputAreaProps> = ({
   ];
 
   const models = [
-    { id: 'phi', name: 'Phi (Local)', icon: Zap, description: 'Fast, local model' },
+    { id: 'mistral', name: 'Mistral (Local)', icon: Zap, description: 'Fast, local model' },
     { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 (Groq)', icon: Sparkles, description: 'Powerful, versatile model' },
   ];
 
