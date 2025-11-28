@@ -102,17 +102,50 @@ const ChatLayout: React.FC = () => {
         }));
 
       const maxTokens = selectedModel === 'mistral' ? 200 : 2048;
-      const apiResponse = await sendMessageToBot(text, maxTokens, 0.7, conversationHistory, selectedModel);
 
-      const newBotMsg: Message = {
-        id: Date.now() + 1,
-        text: apiResponse.response,
+      // Create a placeholder message for the bot response
+      const botMsgId = Date.now() + 1;
+      const initialBotMsg: Message = {
+        id: botMsgId,
+        text: '',
         sender: 'bot',
         timestamp: new Date().toISOString(),
-        model: apiResponse.model,
-        processingTime: apiResponse.processingTime,
+        isStreaming: true,
       };
-      setMessages((prev) => [...prev, newBotMsg]);
+      setMessages((prev) => [...prev, initialBotMsg]);
+
+      const apiResponse = await sendMessageToBot(
+        text,
+        maxTokens,
+        0.7,
+        conversationHistory,
+        selectedModel,
+        (chunk) => {
+          // Update the message with the new chunk
+          setMessages((prev) =>
+            prev.map(msg =>
+              msg.id === botMsgId
+                ? { ...msg, text: msg.text + chunk }
+                : msg
+            )
+          );
+        }
+      );
+
+      // Final update to ensure consistency and remove streaming flag
+      setMessages((prev) =>
+        prev.map(msg =>
+          msg.id === botMsgId
+            ? {
+              ...msg,
+              text: apiResponse.response,
+              model: apiResponse.model,
+              processingTime: apiResponse.processingTime,
+              isStreaming: false
+            }
+            : msg
+        )
+      );
     } catch (err) {
       console.error('Failed to get response', err);
 

@@ -36,8 +36,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(response.status).json({ error: `Azure API error: ${errorText}` });
         }
 
-        const data = await response.json();
-        return res.status(200).json(data);
+        // Set headers for streaming
+        res.setHeader('Content-Type', response.headers.get('Content-Type') || 'application/json');
+        res.setHeader('Transfer-Encoding', 'chunked');
+
+        // Stream the response back to the client
+        if (response.body) {
+            // @ts-ignore - response.body is a Web ReadableStream, but we can iterate it
+            for await (const chunk of response.body) {
+                res.write(chunk);
+            }
+            res.end();
+        } else {
+            res.end();
+        }
+
+    } catch (error) {
 
     } catch (error) {
         console.error('Error calling Azure API:', error);

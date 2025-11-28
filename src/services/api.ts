@@ -36,7 +36,8 @@ export const sendMessageToBot = async (
   maxTokens: number = 2048,
   temperature: number = 0.7,
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>, // Optional: conversation history
-  model: string = 'phi' // Default to local model
+  model: string = 'mistral', // Default to local model
+  onChunk?: (chunk: string) => void // Callback for streaming chunks
 ): Promise<{ response: string; model?: string; processingTime: number }> => {
   // Strong system instruction that should be maintained throughout
   const systemInstruction = `You are Owlet, a University Support Assistant. Your role is to help students with their academic questions, provide guidance on coursework, essays, and university-related matters.
@@ -138,6 +139,7 @@ IMPORTANT INSTRUCTIONS:
     temperature: temperature,
     system: systemMsg,
     conversation_history: historyToSend,
+    stream: true // Enable streaming
   };
 
   // If using custom model, adapt payload for Ollama/OpenAI format
@@ -152,7 +154,7 @@ IMPORTANT INSTRUCTIONS:
       customUrl: customApiUrl,
       model: 'qwen3:8b', // User specified model
       messages: messages,
-      stream: false // Ensure we get a full response, not a stream
+      stream: true // Enable streaming for Ollama
     };
   }
 
@@ -164,6 +166,8 @@ IMPORTANT INSTRUCTIONS:
     },
     body: requestBody,
   });
+
+  const startTime = Date.now();
 
   try {
     const response = await fetch(targetUrl, {
@@ -184,32 +188,95 @@ IMPORTANT INSTRUCTIONS:
       );
     }
 
-    const data: any = await response.json();
-    console.log('✅ API Response data:', data);
-    console.log('🤖 Model used:', data.model || 'Not specified');
+    // Handle Streaming Response
+    if (response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+      let buffer = '';
 
-    // Handle different response formats
-    let responseText = '';
-    if (data.response) {
-      // Our default format
-      responseText = data.response;
-    } else if (data.message && data.message.content) {
-      // Ollama/OpenAI format
-      responseText = data.message.content;
-    } else if (data.choices && data.choices[0] && data.choices[0].message) {
-      // Standard OpenAI format
-      responseText = data.choices[0].message.content;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+
+        const lines = buffer.split('\n');
+        // Keep the last line in the buffer if it's incomplete
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+
+          if (trimmedLine.startsWith('data: ')) {
+            try {
+              const jsonStr = trimmedLine.slice(6);
+              const data = JSON.parse(jsonStr);
+
+              if (data.token) {
+                fullResponse += data.token;
+                if (onChunk) onChunk(data.token);
+              } else if (data.done) {
+                // Stream finished
+              } else if (data.error) {
+                console.error('❌ Stream error:', data.error);
+              }
+            } catch (e) {
+              console.warn('⚠️ Failed to parse SSE data:', trimmedLine);
+            }
+          } else {
+            // Fallback for non-SSE streams (like raw Ollama or standard text)
+            try {
+              // Try parsing as direct JSON (Ollama style)
+              const json = JSON.parse(trimmedLine);
+              if (json.message && json.message.content) {
+                const content = json.message.content;
+                fullResponse += content;
+                if (onChunk) onChunk(content);
+              } else if (json.response) {
+                const content = json.response;
+                fullResponse += content;
+                if (onChunk) onChunk(content);
+              }
+            } catch (e) {
+              // Treat as raw text if it's not JSON and not SSE
+            }
+          }
+        }
+      }
+
+      // Process remaining buffer
+      if (buffer.trim()) {
+        const line = buffer.trim();
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.token) {
+              fullResponse += data.token;
+              if (onChunk) onChunk(data.token);
+            }
+          } catch (e) { }
+        }
+      }
+
+      const processingTime = (Date.now() - startTime) / 1000;
+      return {
+        response: fullResponse,
+        model: model,
+        processingTime: processingTime,
+      };
     } else {
-      console.error('❌ Invalid response format:', data);
-      throw new Error('Invalid response format from API');
+      // Fallback for no body (shouldn't happen with fetch)
+      const data: any = await response.json();
+      return {
+        response: data.response || data.message?.content || '',
+        model: data.model,
+        processingTime: (Date.now() - startTime) / 1000,
+      };
     }
 
-    console.log('✅ Returning response:', responseText);
-    return {
-      response: responseText,
-      model: data.model,
-      processingTime: data.processing_time || 0,
-    };
   } catch (error) {
     console.error('❌ Error sending message:', error);
 

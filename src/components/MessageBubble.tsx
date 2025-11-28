@@ -140,6 +140,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               }}
             >
               {message.text}
+              {message.isStreaming && <span className="inline-block w-1.5 h-4 ml-0.5 bg-gray-400 animate-pulse align-middle rounded-sm"></span>}
             </ReactMarkdown>
           </div>
 
