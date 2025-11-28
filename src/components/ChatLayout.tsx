@@ -82,6 +82,9 @@ const ChatLayout: React.FC = () => {
   };
 
   const handleSendMessage = async (text: string) => {
+    console.log('💬 handleSendMessage called with:', text);
+    if (!text.trim() || isLoading) return;
+
     const newUserMsg: Message = {
       id: Date.now(),
       text,
@@ -89,7 +92,12 @@ const ChatLayout: React.FC = () => {
       timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, newUserMsg]);
+    console.log('➕ Adding user message:', newUserMsg);
+    setMessages((prev) => {
+      const newMessages = [...prev, newUserMsg];
+      console.log('📊 New messages state (user):', newMessages);
+      return newMessages;
+    });
     setIsLoading(true);
     setError(null);
 
@@ -121,6 +129,7 @@ const ChatLayout: React.FC = () => {
         conversationHistory,
         selectedModel,
         (chunk) => {
+          console.log('🌊 Received chunk:', chunk);
           // Update the message with the new chunk
           setMessages((prev) =>
             prev.map(msg =>
@@ -131,6 +140,8 @@ const ChatLayout: React.FC = () => {
           );
         }
       );
+
+      console.log('✅ API Response complete:', apiResponse);
 
       // Final update to ensure consistency and remove streaming flag
       setMessages((prev) =>

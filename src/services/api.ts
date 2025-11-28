@@ -205,118 +205,58 @@ IMPORTANT INSTRUCTIONS:
         const lines = buffer.split('\n');
         // Keep the last line in the buffer if it's incomplete
         buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) continue;
-
-          if (trimmedLine.startsWith('data: ')) {
-            try {
-              const jsonStr = trimmedLine.slice(6);
-              const data = JSON.parse(jsonStr);
-
-              if (data.token) {
-                fullResponse += data.token;
-                if (onChunk) onChunk(data.token);
-              } else if (data.done) {
-                // Stream finished
-              } else if (data.error) {
-                console.error('❌ Stream error:', data.error);
-              }
-            } catch (e) {
-              console.warn('⚠️ Failed to parse SSE data:', trimmedLine);
-            }
-          } else {
-            // Fallback for non-SSE streams (like raw Ollama or standard text)
-            try {
-              // Try parsing as direct JSON (Ollama style)
-              const json = JSON.parse(trimmedLine);
-              if (json.message && json.message.content) {
-                const content = json.message.content;
-                fullResponse += content;
-                if (onChunk) onChunk(content);
-              } else if (json.response) {
-                const content = json.response;
-                fullResponse += content;
-                if (onChunk) onChunk(content);
-              }
-            } catch (e) {
-              // Treat as raw text if it's not JSON and not SSE
-            }
-          }
-        }
-      }
-
-      // Process remaining buffer
-      if (buffer.trim()) {
-        const line = buffer.trim();
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.token) {
-              fullResponse += data.token;
-              if (onChunk) onChunk(data.token);
-            }
-          } catch (e) { }
-        }
-      }
-
-      // Clean the final response
-      fullResponse = fullResponse
-        .replace(/User:|Assistant:/g, '')
-        .replace(/\d{1,2}:\d{2}/g, '')
         .replace(/\d+\.\d+s\w+:\w+/g, '')
-        .trim();
+  .trim();
 
-      const processingTime = (Date.now() - startTime) / 1000;
-      return {
-        response: fullResponse,
-        model: model,
-        processingTime: processingTime,
-      };
+const processingTime = (Date.now() - startTime) / 1000;
+return {
+  response: fullResponse,
+  model: model,
+  processingTime: processingTime,
+};
     } else {
-      // Fallback for no body (shouldn't happen with fetch)
-      const data: any = await response.json();
-      let cleanText = data.response || data.message?.content || '';
+  // Fallback for no body (shouldn't happen with fetch)
+  const data: any = await response.json();
+  let cleanText = data.response || data.message?.content || '';
 
-      // Clean the response
-      cleanText = cleanText
-        .replace(/User:|Assistant:/g, '')
-        .replace(/\d{1,2}:\d{2}/g, '')
-        .replace(/\d+\.\d+s\w+:\w+/g, '')
-        .trim();
+  // Clean the response
+  cleanText = cleanText
+    .replace(/User:|Assistant:/g, '')
+    .replace(/\d{1,2}:\d{2}/g, '')
+    .replace(/\d+\.\d+s\w+:\w+/g, '')
+    .trim();
 
-      return {
-        response: cleanText,
-        model: data.model,
-        processingTime: (Date.now() - startTime) / 1000,
-      };
-    }
+  return {
+    response: cleanText,
+    model: data.model,
+    processingTime: (Date.now() - startTime) / 1000,
+  };
+}
 
   } catch (error) {
-    console.error('❌ Error sending message:', error);
+  console.error('❌ Error sending message:', error);
 
-    // Check if it's a network/CORS error
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      console.error('❌ Network error - possible CORS issue or server unreachable');
-      throw {
-        message: 'Failed to connect to the API server. Please check if the server is running and CORS is configured correctly.',
-        status: undefined,
-      } as ApiError;
-    }
-
-    if (error instanceof Error) {
-      // Re-throw with more context
-      throw {
-        message: error.message,
-        status: (error as ApiError).status,
-      } as ApiError;
-    }
-
+  // Check if it's a network/CORS error
+  if (error instanceof TypeError && error.message.includes('fetch')) {
+    console.error('❌ Network error - possible CORS issue or server unreachable');
     throw {
-      message: 'Failed to connect to the server. Please check your connection and try again.',
+      message: 'Failed to connect to the API server. Please check if the server is running and CORS is configured correctly.',
+      status: undefined,
     } as ApiError;
   }
+
+  if (error instanceof Error) {
+    // Re-throw with more context
+    throw {
+      message: error.message,
+      status: (error as ApiError).status,
+    } as ApiError;
+  }
+
+  throw {
+    message: 'Failed to connect to the server. Please check your connection and try again.',
+  } as ApiError;
+}
 };
 
 const GROQ_TRANSCRIPTION_URL = '/api/transcribe';
