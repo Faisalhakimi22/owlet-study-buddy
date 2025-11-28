@@ -8,7 +8,6 @@ export interface Message {
   error?: boolean;
   model?: string; // Model used for bot responses
   processingTime?: number; // Processing time in seconds
-  isStreaming?: boolean; // Whether the message is currently being streamed
 }
 
 export interface ChatState {
