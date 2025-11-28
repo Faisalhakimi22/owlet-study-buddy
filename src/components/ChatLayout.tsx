@@ -93,6 +93,20 @@ const ChatLayout: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
+    // Create a placeholder for the bot response
+    const botMsgId = Date.now() + 1;
+    const initialBotMsg: Message = {
+      id: botMsgId,
+      text: '', // Start empty
+      sender: 'bot',
+      timestamp: new Date().toISOString(),
+      model: selectedModel,
+      processingTime: 0,
+    };
+
+    // Add placeholder immediately
+    setMessages((prev) => [...prev, initialBotMsg]);
+
     try {
       // Build conversation history
       const conversationHistory = messages
@@ -102,19 +116,43 @@ const ChatLayout: React.FC = () => {
         }));
 
       const maxTokens = selectedModel === 'mistral' ? 200 : 2048;
-      const apiResponse = await sendMessageToBot(text, maxTokens, 0.7, conversationHistory, selectedModel);
 
-      const newBotMsg: Message = {
-        id: Date.now() + 1,
-        text: apiResponse.response,
-        sender: 'bot',
-        timestamp: new Date().toISOString(),
-        model: apiResponse.model,
-        processingTime: apiResponse.processingTime,
-      };
-      setMessages((prev) => [...prev, newBotMsg]);
+      const apiResponse = await sendMessageToBot(
+        text,
+        maxTokens,
+        0.7,
+        conversationHistory,
+        selectedModel,
+        (chunkText) => {
+          // Update the specific message in state with new chunk
+          setMessages((prev) =>
+            prev.map(msg =>
+              msg.id === botMsgId
+                ? { ...msg, text: chunkText }
+                : msg
+            )
+          );
+        }
+      );
+
+      // Final update to ensure consistency and add metadata
+      setMessages((prev) =>
+        prev.map(msg =>
+          msg.id === botMsgId
+            ? {
+              ...msg,
+              text: apiResponse.response,
+              model: apiResponse.model,
+              processingTime: apiResponse.processingTime
+            }
+            : msg
+        )
+      );
     } catch (err) {
       console.error('Failed to get response', err);
+
+      // Remove the placeholder message since it failed
+      setMessages((prev) => prev.filter(msg => msg.id !== botMsgId));
 
       const errorMsg = err && typeof err === 'object' && 'message' in err
         ? (err.message as string)

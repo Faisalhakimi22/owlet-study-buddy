@@ -36,7 +36,8 @@ export const sendMessageToBot = async (
   maxTokens: number = 2048,
   temperature: number = 0.7,
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>, // Optional: conversation history
-  model: string = 'phi' // Default to local model
+  model: string = 'phi', // Default to local model
+  onChunk?: (text: string) => void // Callback for streaming
 ): Promise<{ response: string; model?: string; processingTime: number }> => {
   // Strong system instruction that should be maintained throughout
   const systemInstruction = `You are Owlet, a University Support Assistant. Your role is to help students with their academic questions, provide guidance on coursework, essays, and university-related matters.
@@ -73,6 +74,8 @@ IMPORTANT INSTRUCTIONS:
 
   // Handle Groq API call
   if (model === 'llama-3.3-70b-versatile') {
+    // ... (Groq logic remains similar, but we could add streaming here too if supported)
+    // For now, keeping Groq as is unless requested
     console.log('🚀 Sending request to Groq API:', {
       url: GROQ_API_URL,
       model: model
@@ -138,6 +141,7 @@ IMPORTANT INSTRUCTIONS:
     temperature: temperature,
     system: systemMsg,
     conversation_history: historyToSend,
+    stream: !!onChunk, // Request streaming if callback provided
   };
 
   // If using custom model, adapt payload for Ollama/OpenAI format
@@ -152,7 +156,7 @@ IMPORTANT INSTRUCTIONS:
       customUrl: customApiUrl,
       model: 'qwen3:8b', // User specified model
       messages: messages,
-      stream: false // Ensure we get a full response, not a stream
+      stream: !!onChunk // Use streaming if callback provided
     };
   }
 
@@ -184,6 +188,76 @@ IMPORTANT INSTRUCTIONS:
       );
     }
 
+    // Handle Streaming Response
+    if (onChunk && response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+
+        // Try to parse JSON objects from buffer (Ollama style)
+        // Ollama sends multiple JSON objects concatenated
+        // { ... }\n{ ... }
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep the last incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const json = JSON.parse(line);
+            let textChunk = '';
+
+            // Ollama format
+            if (json.message && json.message.content) {
+              textChunk = json.message.content;
+            }
+            // Standard OpenAI format (delta)
+            else if (json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content) {
+              textChunk = json.choices[0].delta.content;
+            }
+            // Fallback: check for 'response' field (some other APIs)
+            else if (json.response) {
+              textChunk = json.response;
+            }
+
+            if (textChunk) {
+              fullText += textChunk;
+              onChunk(fullText);
+            }
+
+            if (json.done) {
+              // Stream finished
+            }
+          } catch (e) {
+            // If not JSON, maybe it's raw text?
+            // If we are in "custom-model" mode, it's likely JSON.
+            // If default model, it might be raw text.
+            // Let's assume if JSON parse fails, treat as raw text ONLY if it doesn't look like JSON
+            if (!line.trim().startsWith('{')) {
+              fullText += line + '\n';
+              onChunk(fullText);
+            }
+          }
+        }
+      }
+
+      return {
+        response: fullText,
+        model: model,
+        processingTime: 0, // Hard to calc in stream
+      };
+    }
+
+    // Handle Non-Streaming Response (Fallback)
     const data: any = await response.json();
     console.log('✅ API Response data:', data);
     console.log('🤖 Model used:', data.model || 'Not specified');

@@ -36,6 +36,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(response.status).json({ error: `Azure API error: ${errorText}` });
         }
 
+        // Handle streaming response
+        const contentType = response.headers.get('content-type');
+        if (contentType && (contentType.includes('text/event-stream') || contentType.includes('application/x-ndjson'))) {
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+
+            if (response.body) {
+                // Pipe the stream
+                // @ts-ignore - Vercel/Node fetch types might mismatch but this works in runtime
+                for await (const chunk of response.body) {
+                    res.write(chunk);
+                }
+                res.end();
+            }
+            return;
+        }
+
         const data = await response.json();
         return res.status(200).json(data);
 
