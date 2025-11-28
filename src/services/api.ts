@@ -55,8 +55,8 @@ IMPORTANT INSTRUCTIONS:
   let historyToSend: ChatMessage[] | null = null;
 
   if (conversationHistory && conversationHistory.length > 0) {
-    // Limit conversation history to last 4 messages (2 exchanges) as per optimal settings
-    const limitedHistory = conversationHistory.slice(-4);
+    // Limit conversation history to last 6 messages (3 exchanges) to avoid context overflow
+    const limitedHistory = conversationHistory.slice(-6);
 
     // Convert to ChatMessage format for the API
     historyToSend = limitedHistory.map(msg => ({
@@ -193,46 +193,23 @@ IMPORTANT INSTRUCTIONS:
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullResponse = '';
-      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
 
-        const lines = buffer.split('\n');
-        // Keep the last line in the buffer if it's incomplete
-        buffer = lines.pop() || '';
+        // Try to parse JSON chunks if they are wrapped in JSON (Ollama sometimes does this)
+        // Or just append text if it's raw text
+        // For simplicity, let's assume raw text or handle basic JSON lines
 
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) continue;
-
-          console.log('📥 Stream line:', trimmedLine);
-
-          if (trimmedLine.startsWith('data: ')) {
-            try {
-              const jsonStr = trimmedLine.slice(6);
-              const data = JSON.parse(jsonStr);
-
-              if (data.token) {
-                fullResponse += data.token;
-                if (onChunk) onChunk(data.token);
-              } else if (data.done) {
-                console.log('🏁 Stream done signal received');
-              } else if (data.error) {
-                console.error('❌ Stream error:', data.error);
-              }
-            } catch (e) {
-              console.warn('⚠️ Failed to parse SSE data:', trimmedLine);
-            }
-          } else {
-            // Fallback for non-SSE streams (like raw Ollama or standard text)
-            try {
-              // Try parsing as direct JSON (Ollama style)
-              const json = JSON.parse(trimmedLine);
+        // If it's Ollama JSON stream
+        if (chunk.trim().startsWith('{') && chunk.trim().endsWith('}')) {
+          try {
+            const lines = chunk.split('\n').filter(line => line.trim() !== '');
+            for (const line of lines) {
+              const json = JSON.parse(line);
               if (json.message && json.message.content) {
                 const content = json.message.content;
                 fullResponse += content;
@@ -242,35 +219,18 @@ IMPORTANT INSTRUCTIONS:
                 fullResponse += content;
                 if (onChunk) onChunk(content);
               }
-            } catch (e) {
-              // Treat as raw text if it's not JSON and not SSE
-              console.log('📝 Raw text chunk:', trimmedLine);
             }
+          } catch (e) {
+            // If parsing fails, treat as raw text
+            fullResponse += chunk;
+            if (onChunk) onChunk(chunk);
           }
+        } else {
+          // Raw text stream
+          fullResponse += chunk;
+          if (onChunk) onChunk(chunk);
         }
       }
-
-      // Process remaining buffer
-      if (buffer.trim()) {
-        const line = buffer.trim();
-        console.log('📥 Remaining buffer:', line);
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.token) {
-              fullResponse += data.token;
-              if (onChunk) onChunk(data.token);
-            }
-          } catch (e) { }
-        }
-      }
-
-      // Clean the final response
-      fullResponse = fullResponse
-        .replace(/User:|Assistant:/g, '')
-        .replace(/\d{1,2}:\d{2}/g, '')
-        .replace(/\d+\.\d+s\w+:\w+/g, '')
-        .trim();
 
       const processingTime = (Date.now() - startTime) / 1000;
       return {
@@ -281,17 +241,8 @@ IMPORTANT INSTRUCTIONS:
     } else {
       // Fallback for no body (shouldn't happen with fetch)
       const data: any = await response.json();
-      let cleanText = data.response || data.message?.content || '';
-
-      // Clean the response
-      cleanText = cleanText
-        .replace(/User:|Assistant:/g, '')
-        .replace(/\d{1,2}:\d{2}/g, '')
-        .replace(/\d+\.\d+s\w+:\w+/g, '')
-        .trim();
-
       return {
-        response: cleanText,
+        response: data.response || data.message?.content || '',
         model: data.model,
         processingTime: (Date.now() - startTime) / 1000,
       };
