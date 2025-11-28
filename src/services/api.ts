@@ -40,7 +40,12 @@ export const sendMessageToBot = async (
   onChunk?: (text: string) => void // Callback for streaming
 ): Promise<{ response: string; model?: string; processingTime: number }> => {
   // Strong system instruction that should be maintained throughout
-  const systemInstruction = `You are Owlet, a University Support Assistant. Your role is to help students with their academic questions, provide guidance on coursework, essays, and university-related matters.
+  // Optimize for speed if using local models
+  const isLocalModel = model === 'mistral' || model === 'custom-model';
+
+  const systemInstruction = isLocalModel
+    ? "You are Owlet, a helpful university support assistant. Be concise."
+    : `You are Owlet, a University Support Assistant. Your role is to help students with their academic questions, provide guidance on coursework, essays, and university-related matters.
 
 IMPORTANT INSTRUCTIONS:
 - Always respond as a helpful support assistant, NOT as a student asking for help
@@ -55,8 +60,10 @@ IMPORTANT INSTRUCTIONS:
   let historyToSend: ChatMessage[] | null = null;
 
   if (conversationHistory && conversationHistory.length > 0) {
-    // Limit conversation history to last 6 messages (3 exchanges) to avoid context overflow
-    const limitedHistory = conversationHistory.slice(-6);
+    // Limit conversation history to avoid context overflow and improve speed
+    // For local models, keep it very short (last 2 exchanges)
+    const historyLimit = isLocalModel ? -4 : -6;
+    const limitedHistory = conversationHistory.slice(historyLimit);
 
     // Convert to ChatMessage format for the API
     historyToSend = limitedHistory.map(msg => ({
