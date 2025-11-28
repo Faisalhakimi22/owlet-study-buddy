@@ -118,428 +118,308 @@ IMPORTANT INSTRUCTIONS:
       };
 
     } catch (error) {
-      // API service for communicating with the local LLM API
+      console.error('❌ Error calling Groq API:', error);
+      throw {
+        message: error instanceof Error ? error.message : 'Failed to call Groq API',
+      } as ApiError;
+    }
+  }
 
-      const API_URL = '/api/chat'; // Use local serverless function to avoid Mixed Content error
-      // const API_KEY = import.meta.env.VITE_API_KEY; // Handled by backend
-      // const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; // Removed for security
-      // const GROQ_API_KEY = ''; // Placeholder removed as it's no longer needed
-      const GROQ_API_URL = '/api/groq'; // Use local serverless function
+  // Default Local API call / Custom Proxy
+  // Check for custom API URL in localStorage
+  const customApiUrl = localStorage.getItem('custom-api-url');
 
-      export interface ChatMessage {
-        role: 'user' | 'assistant';
-        content: string;
-      }
+  // Always send to the Vercel backend (API_URL) to avoid CORS
+  // Pass the custom URL in the body so the backend can proxy it
+  const targetUrl = API_URL;
 
-      export interface ChatRequest {
-        prompt: string;
-        max_tokens?: number;
-        temperature?: number;
-        system?: string; // System instruction for the model
-        conversation_history?: ChatMessage[] | null; // Conversation history
-        model?: string;
-      }
+  let requestBody: any = {
+    prompt: prompt,
+    max_tokens: maxTokens,
+    temperature: temperature,
+    system: systemMsg,
+    conversation_history: historyToSend,
+    stream: true // Enable streaming
+  };
 
-      export interface ChatResponse {
-        response: string;
-        model?: string; // Model used for the response
-        processing_time: number;
-      }
+  // If using custom model, adapt payload for Ollama/OpenAI format
+  if (model === 'custom-model' && customApiUrl) {
+    const messages = [
+      { role: 'system', content: systemMsg },
+      ...(historyToSend || []),
+      { role: 'user', content: prompt }
+    ];
 
-      export interface ApiError {
-        message: string;
-        status?: number;
-      }
+    requestBody = {
+      customUrl: customApiUrl,
+      model: 'qwen3:8b', // User specified model
+      messages: messages,
+      stream: true // Enable streaming for Ollama
+    };
+  }
 
-      export const sendMessageToBot = async (
-        message: string,
-        maxTokens: number = 2048,
-        temperature: number = 0.7,
-        conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>, // Optional: conversation history
-        model: string = 'mistral', // Default to local model
-        onChunk?: (chunk: string) => void // Callback for streaming chunks
-      ): Promise<{ response: string; model?: string; processingTime: number }> => {
-        // Strong system instruction that should be maintained throughout
-        const systemInstruction = `You are Owlet, a University Support Assistant. Your role is to help students with their academic questions, provide guidance on coursework, essays, and university-related matters.
+  console.log('🚀 Sending request to Proxy API:', {
+    url: targetUrl,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: requestBody,
+  });
 
-IMPORTANT INSTRUCTIONS:
-- Always respond as a helpful support assistant, NOT as a student asking for help
-- Do NOT repeat or include the conversation history in your response
-- Only respond to the CURRENT user message
-- Be concise, friendly, and professional`;
+  const startTime = Date.now();
 
-        // Build the request with conversation history if available
-        // The backend now supports conversation_history as a separate field
-        let prompt = message;
-        let systemMsg = systemInstruction;
-        let historyToSend: ChatMessage[] | null = null;
+  try {
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
 
-        if (conversationHistory && conversationHistory.length > 0) {
-          // Limit conversation history to last 4 messages (2 exchanges) as per optimal settings
-          const limitedHistory = conversationHistory.slice(-4);
+    console.log('📡 API Response status:', response.status, response.statusText);
 
-          // Convert to ChatMessage format for the API
-          historyToSend = limitedHistory.map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }));
-        }
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ API Error Response:', errorText);
+      throw new Error(
+        `API error: ${response.status} - ${errorText || response.statusText}`
+      );
+    }
 
-        // Log the full prompt for debugging (truncated if too long)
-        const promptPreview = prompt.length > 500 ? prompt.substring(0, 500) + '...' : prompt;
-        console.log('📝 Full prompt being sent:', promptPreview);
-        if (prompt.length > 500) {
-          console.log('📝 Prompt length:', prompt.length, 'characters');
-        }
+    // Handle Streaming Response
+    if (response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+      let buffer = '';
 
-        // Handle Groq API call
-        if (model === 'llama-3.3-70b-versatile') {
-          console.log('🚀 Sending request to Groq API:', {
-            url: GROQ_API_URL,
-            model: model
-          });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-          const startTime = Date.now();
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
 
-          try {
-            const messages = [
-              { role: 'system', content: systemMsg },
-              ...(historyToSend || []),
-              { role: 'user', content: prompt }
-            ];
+        const lines = buffer.split('\n');
+        // Keep the last line in the buffer if it's incomplete
+        buffer = lines.pop() || '';
 
-            const response = await fetch(GROQ_API_URL, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                // 'Authorization': `Bearer ${GROQ_API_KEY}` // Handled by backend
-              },
-              body: JSON.stringify({
-                model: model,
-                messages: messages,
-                max_tokens: maxTokens,
-                temperature: temperature
-              })
-            });
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
 
-            if (!response.ok) {
-              const errorText = await response.text();
-              console.error('❌ Groq API Error:', errorText);
-              throw new Error(`Groq API error: ${response.status} - ${errorText}`);
-            }
+          console.log('📥 Stream line:', trimmedLine);
 
-            const data = await response.json();
-            const processingTime = (Date.now() - startTime) / 1000;
+          if (trimmedLine.startsWith('data: ')) {
+            try {
+              const jsonStr = trimmedLine.slice(6);
+              const data = JSON.parse(jsonStr);
 
-            return {
-              response: data.choices[0].message.content,
-              model: data.model,
-              processingTime: processingTime
-            };
-
-          } catch (error) {
-            console.error('❌ Error calling Groq API:', error);
-            throw {
-              message: error instanceof Error ? error.message : 'Failed to call Groq API',
-            } as ApiError;
-          }
-        }
-
-        // Default Local API call / Custom Proxy
-        // Check for custom API URL in localStorage
-        const customApiUrl = localStorage.getItem('custom-api-url');
-
-        // Always send to the Vercel backend (API_URL) to avoid CORS
-        // Pass the custom URL in the body so the backend can proxy it
-        const targetUrl = API_URL;
-
-        let requestBody: any = {
-          prompt: prompt,
-          max_tokens: maxTokens,
-          temperature: temperature,
-          system: systemMsg,
-          conversation_history: historyToSend,
-          stream: true // Enable streaming
-        };
-
-        // If using custom model, adapt payload for Ollama/OpenAI format
-        if (model === 'custom-model' && customApiUrl) {
-          const messages = [
-            { role: 'system', content: systemMsg },
-            ...(historyToSend || []),
-            { role: 'user', content: prompt }
-          ];
-
-          requestBody = {
-            customUrl: customApiUrl,
-            model: 'qwen3:8b', // User specified model
-            messages: messages,
-            stream: true // Enable streaming for Ollama
-          };
-        }
-
-        console.log('🚀 Sending request to Proxy API:', {
-          url: targetUrl,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: requestBody,
-        });
-
-        const startTime = Date.now();
-
-        try {
-          const response = await fetch(targetUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody),
-          });
-
-          console.log('📡 API Response status:', response.status, response.statusText);
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ API Error Response:', errorText);
-            throw new Error(
-              `API error: ${response.status} - ${errorText || response.statusText}`
-            );
-          }
-
-          // Handle Streaming Response
-          if (response.body) {
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let fullResponse = '';
-            let buffer = '';
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-
-              const chunk = decoder.decode(value, { stream: true });
-              buffer += chunk;
-
-              const lines = buffer.split('\n');
-              // Keep the last line in the buffer if it's incomplete
-              buffer = lines.pop() || '';
-
-              for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (!trimmedLine) continue;
-
-                console.log('📥 Stream line:', trimmedLine);
-
-                if (trimmedLine.startsWith('data: ')) {
-                  try {
-                    const jsonStr = trimmedLine.slice(6);
-                    const data = JSON.parse(jsonStr);
-
-                    if (data.token) {
-                      fullResponse += data.token;
-                      if (onChunk) onChunk(data.token);
-                    } else if (data.done) {
-                      console.log('🏁 Stream done signal received');
-                    } else if (data.error) {
-                      console.error('❌ Stream error:', data.error);
-                    }
-                  } catch (e) {
-                    console.warn('⚠️ Failed to parse SSE data:', trimmedLine);
-                  }
-                } else {
-                  // Fallback for non-SSE streams (like raw Ollama or standard text)
-                  try {
-                    // Try parsing as direct JSON (Ollama style)
-                    const json = JSON.parse(trimmedLine);
-                    if (json.message && json.message.content) {
-                      const content = json.message.content;
-                      fullResponse += content;
-                      if (onChunk) onChunk(content);
-                    } else if (json.response) {
-                      const content = json.response;
-                      fullResponse += content;
-                      if (onChunk) onChunk(content);
-                    }
-                  } catch (e) {
-                    // Treat as raw text if it's not JSON and not SSE
-                    console.log('📝 Raw text chunk:', trimmedLine);
-                  }
-                }
+              if (data.token) {
+                fullResponse += data.token;
+                if (onChunk) onChunk(data.token);
+              } else if (data.done) {
+                console.log('🏁 Stream done signal received');
+              } else if (data.error) {
+                console.error('❌ Stream error:', data.error);
               }
+            } catch (e) {
+              console.warn('⚠️ Failed to parse SSE data:', trimmedLine);
             }
-
-            // Process remaining buffer
-            if (buffer.trim()) {
-              const line = buffer.trim();
-              console.log('📥 Remaining buffer:', line);
-              if (line.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(line.slice(6));
-                  if (data.token) {
-                    fullResponse += data.token;
-                    if (onChunk) onChunk(data.token);
-                  }
-                } catch (e) { }
-              }
-            }
-
-            // Clean the final response
-            fullResponse = fullResponse
-              .replace(/User:|Assistant:/g, '')
-              .replace(/\d{1,2}:\d{2}/g, '')
-              .replace(/\d+\.\d+s\w+:\w+/g, '')
-              .trim();
-
-            const processingTime = (Date.now() - startTime) / 1000;
-            return {
-              response: fullResponse,
-              model: model,
-              processingTime: processingTime,
-            };
           } else {
-            // Fallback for no body (shouldn't happen with fetch)
-            const data: any = await response.json();
-            let cleanText = data.response || data.message?.content || '';
-
-            // Clean the response
-            cleanText = cleanText
-              .replace(/User:|Assistant:/g, '')
-              .replace(/\d{1,2}:\d{2}/g, '')
-              .replace(/\d+\.\d+s\w+:\w+/g, '')
-              .trim();
-
-            return {
-              response: cleanText,
-              model: data.model,
-              processingTime: (Date.now() - startTime) / 1000,
-            };
+            // Fallback for non-SSE streams (like raw Ollama or standard text)
+            try {
+              // Try parsing as direct JSON (Ollama style)
+              const json = JSON.parse(trimmedLine);
+              if (json.message && json.message.content) {
+                const content = json.message.content;
+                fullResponse += content;
+                if (onChunk) onChunk(content);
+              } else if (json.response) {
+                const content = json.response;
+                fullResponse += content;
+                if (onChunk) onChunk(content);
+              }
+            } catch (e) {
+              // Treat as raw text if it's not JSON and not SSE
+              console.log('📝 Raw text chunk:', trimmedLine);
+            }
           }
-
-        } catch (error) {
-          console.error('❌ Error sending message:', error);
-
-          // Check if it's a network/CORS error
-          if (error instanceof TypeError && error.message.includes('fetch')) {
-            console.error('❌ Network error - possible CORS issue or server unreachable');
-            throw {
-              message: 'Failed to connect to the API server. Please check if the server is running and CORS is configured correctly.',
-              status: undefined,
-            } as ApiError;
-          }
-
-          if (error instanceof Error) {
-            // Re-throw with more context
-            throw {
-              message: error.message,
-              status: (error as ApiError).status,
-            } as ApiError;
-          }
-
-          throw {
-            message: 'Failed to connect to the server. Please check your connection and try again.',
-          } as ApiError;
         }
-      };
+      }
 
-      const GROQ_TRANSCRIPTION_URL = '/api/transcribe';
-      const GROQ_TRANSLATION_URL = '/api/translate';
-      const GROQ_TTS_URL = '/api/tts';
-
-      export const transcribeAudio = async (audioFile: File): Promise<string> => {
-        const formData = new FormData();
-        formData.append('file', audioFile);
-        formData.append('model', 'whisper-large-v3');
-
-        try {
-          const response = await fetch(GROQ_TRANSCRIPTION_URL, {
-            method: 'POST',
-            headers: {
-              // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
-            },
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Groq Transcription API error: ${response.status} - ${errorText}`);
-          }
-
-          const data = await response.json();
-          return data.text;
-        } catch (error) {
-          console.error('❌ Error transcribing audio:', error);
-          throw error;
+      // Process remaining buffer
+      if (buffer.trim()) {
+        const line = buffer.trim();
+        console.log('📥 Remaining buffer:', line);
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.token) {
+              fullResponse += data.token;
+              if (onChunk) onChunk(data.token);
+            }
+          } catch (e) { }
         }
+      }
+
+      // Clean the final response
+      fullResponse = fullResponse
+        .replace(/User:|Assistant:/g, '')
+        .replace(/\d{1,2}:\d{2}/g, '')
+        .replace(/\d+\.\d+s\w+:\w+/g, '')
+        .trim();
+
+      const processingTime = (Date.now() - startTime) / 1000;
+      return {
+        response: fullResponse,
+        model: model,
+        processingTime: processingTime,
       };
+    } else {
+      // Fallback for no body (shouldn't happen with fetch)
+      const data: any = await response.json();
+      let cleanText = data.response || data.message?.content || '';
 
-      export const translateAudio = async (audioFile: File): Promise<string> => {
-        const formData = new FormData();
-        formData.append('file', audioFile);
-        formData.append('model', 'whisper-large-v3');
+      // Clean the response
+      cleanText = cleanText
+        .replace(/User:|Assistant:/g, '')
+        .replace(/\d{1,2}:\d{2}/g, '')
+        .replace(/\d+\.\d+s\w+:\w+/g, '')
+        .trim();
 
-        try {
-          const response = await fetch(GROQ_TRANSLATION_URL, {
-            method: 'POST',
-            headers: {
-              // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
-            },
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Groq Translation API error: ${response.status} - ${errorText}`);
-          }
-
-          const data = await response.json();
-          return data.text;
-        } catch (error) {
-          console.error('❌ Error translating audio:', error);
-          throw error;
-        }
+      return {
+        response: cleanText,
+        model: data.model,
+        processingTime: (Date.now() - startTime) / 1000,
       };
+    }
 
-      export const generateSpeech = async (text: string): Promise<Blob> => {
-        console.log('🔊 Generating speech for text:', text.substring(0, 50) + '...');
-        try {
-          const requestBody = {
-            // Wait, the user specifically gave 'playai-tts'. I should stick to that but maybe try a standard one if that fails? 
-            // actually, let's keep the user's model but log the request.
-            model: 'playai-tts',
-            input: text,
-            voice: 'Fritz-PlayAI',
-            response_format: 'wav',
-          };
+  } catch (error) {
+    console.error('❌ Error sending message:', error);
 
-          console.log('🚀 Sending TTS request:', {
-            url: GROQ_TTS_URL,
-            body: requestBody
-          });
+    // Check if it's a network/CORS error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('❌ Network error - possible CORS issue or server unreachable');
+      throw {
+        message: 'Failed to connect to the API server. Please check if the server is running and CORS is configured correctly.',
+        status: undefined,
+      } as ApiError;
+    }
 
-          const response = await fetch(GROQ_TTS_URL, {
-            method: 'POST',
-            headers: {
-              // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody),
-          });
+    if (error instanceof Error) {
+      // Re-throw with more context
+      throw {
+        message: error.message,
+        status: (error as ApiError).status,
+      } as ApiError;
+    }
 
-          console.log('📡 TTS Response status:', response.status);
+    throw {
+      message: 'Failed to connect to the server. Please check your connection and try again.',
+    } as ApiError;
+  }
+};
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Groq TTS API Error:', errorText);
-            throw new Error(`Groq TTS API error: ${response.status} - ${errorText}`);
-          }
+const GROQ_TRANSCRIPTION_URL = '/api/transcribe';
+const GROQ_TRANSLATION_URL = '/api/translate';
+const GROQ_TTS_URL = '/api/tts';
 
-          const blob = await response.blob();
-          console.log('✅ TTS Blob received, size:', blob.size);
-          return blob;
-        } catch (error) {
-          console.error('❌ Error generating speech:', error);
-          throw error;
-        }
-      };
+export const transcribeAudio = async (audioFile: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append('file', audioFile);
+  formData.append('model', 'whisper-large-v3');
+
+  try {
+    const response = await fetch(GROQ_TRANSCRIPTION_URL, {
+      method: 'POST',
+      headers: {
+        // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Groq Transcription API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.text;
+  } catch (error) {
+    console.error('❌ Error transcribing audio:', error);
+    throw error;
+  }
+};
+
+export const translateAudio = async (audioFile: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append('file', audioFile);
+  formData.append('model', 'whisper-large-v3');
+
+  try {
+    const response = await fetch(GROQ_TRANSLATION_URL, {
+      method: 'POST',
+      headers: {
+        // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Groq Translation API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.text;
+  } catch (error) {
+    console.error('❌ Error translating audio:', error);
+    throw error;
+  }
+};
+
+export const generateSpeech = async (text: string): Promise<Blob> => {
+  console.log('🔊 Generating speech for text:', text.substring(0, 50) + '...');
+  try {
+    const requestBody = {
+      // Wait, the user specifically gave 'playai-tts'. I should stick to that but maybe try a standard one if that fails? 
+      // actually, let's keep the user's model but log the request.
+      model: 'playai-tts',
+      input: text,
+      voice: 'Fritz-PlayAI',
+      response_format: 'wav',
+    };
+
+    console.log('🚀 Sending TTS request:', {
+      url: GROQ_TTS_URL,
+      body: requestBody
+    });
+
+    const response = await fetch(GROQ_TTS_URL, {
+      method: 'POST',
+      headers: {
+        // 'Authorization': `Bearer ${GROQ_API_KEY}`, // Handled by backend
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    console.log('📡 TTS Response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Groq TTS API Error:', errorText);
+      throw new Error(`Groq TTS API error: ${response.status} - ${errorText}`);
+    }
+
+    const blob = await response.blob();
+    console.log('✅ TTS Blob received, size:', blob.size);
+    return blob;
+  } catch (error) {
+    console.error('❌ Error generating speech:', error);
+    throw error;
+  }
+};
