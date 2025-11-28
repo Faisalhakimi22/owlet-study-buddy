@@ -101,7 +101,7 @@ const ChatLayout: React.FC = () => {
           content: msg.text,
         }));
 
-      const maxTokens = selectedModel === 'mistral' ? 200 : 2048;
+      const maxTokens = selectedModel === 'mistral' ? 150 : 2048;
 
       // Create a placeholder message for the bot response
       const botMsgId = Date.now() + 1;

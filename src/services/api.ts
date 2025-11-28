@@ -55,8 +55,8 @@ IMPORTANT INSTRUCTIONS:
   let historyToSend: ChatMessage[] | null = null;
 
   if (conversationHistory && conversationHistory.length > 0) {
-    // Limit conversation history to last 6 messages (3 exchanges) to avoid context overflow
-    const limitedHistory = conversationHistory.slice(-6);
+    // Limit conversation history to last 4 messages (2 exchanges) as per optimal settings
+    const limitedHistory = conversationHistory.slice(-4);
 
     // Convert to ChatMessage format for the API
     historyToSend = limitedHistory.map(msg => ({
@@ -261,6 +261,13 @@ IMPORTANT INSTRUCTIONS:
         }
       }
 
+      // Clean the final response
+      fullResponse = fullResponse
+        .replace(/User:|Assistant:/g, '')
+        .replace(/\d{1,2}:\d{2}/g, '')
+        .replace(/\d+\.\d+s\w+:\w+/g, '')
+        .trim();
+
       const processingTime = (Date.now() - startTime) / 1000;
       return {
         response: fullResponse,
@@ -270,8 +277,17 @@ IMPORTANT INSTRUCTIONS:
     } else {
       // Fallback for no body (shouldn't happen with fetch)
       const data: any = await response.json();
+      let cleanText = data.response || data.message?.content || '';
+
+      // Clean the response
+      cleanText = cleanText
+        .replace(/User:|Assistant:/g, '')
+        .replace(/\d{1,2}:\d{2}/g, '')
+        .replace(/\d+\.\d+s\w+:\w+/g, '')
+        .trim();
+
       return {
-        response: data.response || data.message?.content || '',
+        response: cleanText,
         model: data.model,
         processingTime: (Date.now() - startTime) / 1000,
       };
